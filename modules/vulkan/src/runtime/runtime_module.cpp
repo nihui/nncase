@@ -38,7 +38,7 @@ result<void> vulkan_runtime_module::initialize_core(runtime_module_init_context 
     text_ = context.section(".text");
     shader_ = context.section(".shader");
 
-    try_(initialize_vulkan());
+    checked_try(initialize_vulkan());
     return ok();
 }
 
@@ -68,19 +68,19 @@ result<void> vulkan_runtime_module::validate_output_tensor(NNCASE_UNUSED size_t 
 
 result<void> vulkan_runtime_module::initialize_vulkan() noexcept
 {
-    try_(initialize_vulkan_instance());
-    try_(initialize_vulkan_device());
-    try_(initialize_vulkan_memory());
-    try_(initialize_vulkan_commands());
+    checked_try(initialize_vulkan_instance());
+    checked_try(initialize_vulkan_device());
+    checked_try(initialize_vulkan_memory());
+    checked_try(initialize_vulkan_commands());
     return ok();
 }
 
 result<void> vulkan_runtime_module::initialize_vulkan_commands() noexcept
 {
     vk::CommandBufferBeginInfo cmdb_info;
-    try_(vk::to_result(cmd_buffer_.begin(cmdb_info)));
-    try_(visit(text_));
-    try_(vk::to_result(cmd_buffer_.end()));
+    checked_try(vk::to_result(cmd_buffer_.begin(cmdb_info)));
+    checked_try(visit(text_));
+    checked_try(vk::to_result(cmd_buffer_.end()));
     return ok();
 }
 
@@ -88,30 +88,30 @@ result<void> vulkan_runtime_module::initialize_vulkan_instance() noexcept
 {
     vk::ApplicationInfo app_info("nncase.runtime", 1, "nncase", 1, VK_API_VERSION_1_1);
     vk::InstanceCreateInfo create_info({}, &app_info);
-    try_set(instance_, vk::to_result(vk::createInstance(create_info)));
+    checked_try_set(instance_, vk::to_result(vk::createInstance(create_info)));
     return ok();
 }
 
 result<void> vulkan_runtime_module::initialize_vulkan_device() noexcept
 {
-    try_set(physical_device_, select_physical_device());
+    checked_try_set(physical_device_, select_physical_device());
     auto queue_families = physical_device_.getQueueFamilyProperties();
-    try_set(compute_queue_index_, select_queue_family(queue_families, { vk::QueueFlagBits::eCompute, vk::QueueFlagBits::eGraphics, vk::QueueFlagBits::eTransfer }));
+    checked_try_set(compute_queue_index_, select_queue_family(queue_families, { vk::QueueFlagBits::eCompute, vk::QueueFlagBits::eGraphics, vk::QueueFlagBits::eTransfer }));
 
     float priorities[] = { 0.0f };
     vk::DeviceQueueCreateInfo queue_create_info({}, compute_queue_index_, 1, priorities);
     vk::DeviceCreateInfo device_create_info({}, queue_create_info);
-    try_set(device_, vk::to_result(physical_device_.createDevice(device_create_info)));
+    checked_try_set(device_, vk::to_result(physical_device_.createDevice(device_create_info)));
     compute_queue_ = device_.getQueue(compute_queue_index_, 0);
 
     vk::DescriptorPoolSize descp_size(vk::DescriptorType::eStorageBuffer, descriptors_);
     vk::DescriptorPoolCreateInfo descp_cinfo({}, descriptor_sets_, descp_size);
-    try_set(buffer_desc_pool_, vk::to_result(device_.createDescriptorPool(descp_cinfo)));
+    checked_try_set(buffer_desc_pool_, vk::to_result(device_.createDescriptorPool(descp_cinfo)));
 
     vk::CommandPoolCreateInfo cmdp_cinfo({}, compute_queue_index_);
-    try_set(cmd_pool_, vk::to_result(device_.createCommandPool(cmdp_cinfo)));
+    checked_try_set(cmd_pool_, vk::to_result(device_.createCommandPool(cmdp_cinfo)));
     vk::CommandBufferAllocateInfo cmdb_cinfo(cmd_pool_, vk::CommandBufferLevel::ePrimary, 1);
-    try_var(cmdbs, vk::to_result(device_.allocateCommandBuffers(cmdb_cinfo)));
+    checked_try_var(cmdbs, vk::to_result(device_.allocateCommandBuffers(cmdb_cinfo)));
     cmd_buffer_ = cmdbs[0];
     return ok();
 }
@@ -121,25 +121,25 @@ result<void> vulkan_runtime_module::initialize_vulkan_memory() noexcept
     auto input_mem = mempool(mem_input);
     if (input_mem.size)
     {
-        try_set(input_buffer_, allocate_vulkan_buffer(input_mem.size));
-        try_set(input_mem_, allocate_vulkan_memory({ vk::MemoryPropertyFlagBits::eHostVisible, vk::MemoryPropertyFlagBits::eHostCached, {} }, input_buffer_));
-        try_(bind_vulkan_buffer(input_buffer_, input_mem_));
+        checked_try_set(input_buffer_, allocate_vulkan_buffer(input_mem.size));
+        checked_try_set(input_mem_, allocate_vulkan_memory({ vk::MemoryPropertyFlagBits::eHostVisible, vk::MemoryPropertyFlagBits::eHostCached, {} }, input_buffer_));
+        checked_try(bind_vulkan_buffer(input_buffer_, input_mem_));
     }
 
     auto output_mem = mempool(mem_output);
     if (output_mem.size)
     {
-        try_set(output_buffer_, allocate_vulkan_buffer(output_mem.size));
-        try_set(output_mem_, allocate_vulkan_memory({ vk::MemoryPropertyFlagBits::eHostVisible, vk::MemoryPropertyFlagBits::eHostCached, {} }, output_buffer_));
-        try_(bind_vulkan_buffer(output_buffer_, output_mem_));
+        checked_try_set(output_buffer_, allocate_vulkan_buffer(output_mem.size));
+        checked_try_set(output_mem_, allocate_vulkan_memory({ vk::MemoryPropertyFlagBits::eHostVisible, vk::MemoryPropertyFlagBits::eHostCached, {} }, output_buffer_));
+        checked_try(bind_vulkan_buffer(output_buffer_, output_mem_));
     }
 
     auto data_mem = mempool(mem_data);
     if (data_mem.size)
     {
-        try_set(data_buffer_, allocate_vulkan_buffer(data_mem.size));
-        try_set(data_mem_, allocate_vulkan_memory({ {}, vk::MemoryPropertyFlagBits::eDeviceLocal, {} }, data_buffer_));
-        try_(bind_vulkan_buffer(data_buffer_, data_mem_));
+        checked_try_set(data_buffer_, allocate_vulkan_buffer(data_mem.size));
+        checked_try_set(data_mem_, allocate_vulkan_memory({ {}, vk::MemoryPropertyFlagBits::eDeviceLocal, {} }, data_buffer_));
+        checked_try(bind_vulkan_buffer(data_buffer_, data_mem_));
     }
     return ok();
 }
@@ -148,7 +148,7 @@ result<vk::DeviceMemory> vulkan_runtime_module::allocate_vulkan_memory(const sel
 {
     auto req = device_.getBufferMemoryRequirements(buffer);
     auto properties = physical_device_.getMemoryProperties();
-    try_var(type_index, select_memory_type(properties, options, req.size));
+    checked_try_var(type_index, select_memory_type(properties, options, req.size));
     vk::MemoryAllocateInfo allocate(req.size, static_cast<uint32_t>(type_index));
     return vk::to_result(device_.allocateMemory(allocate));
 }
@@ -169,7 +169,7 @@ result<vk::PhysicalDevice> vulkan_runtime_module::select_physical_device() noexc
 {
     vk::PhysicalDevice *intergrated = nullptr;
 
-    try_var(devices, vk::to_result(instance_.enumeratePhysicalDevices()));
+    checked_try_var(devices, vk::to_result(instance_.enumeratePhysicalDevices()));
     for (auto &device : devices)
     {
         auto properties = device.getProperties();
@@ -263,44 +263,44 @@ result<size_t> vulkan_runtime_module::select_memory_type(const vk::PhysicalDevic
 
 result<void> vulkan_runtime_module::run_core() noexcept
 {
-    try_(preprocess_inputs());
+    checked_try(preprocess_inputs());
 
     vk::SubmitInfo si({}, {}, cmd_buffer_, {});
-    try_(vk::to_result(compute_queue_.submit(si)));
-    try_(vk::to_result(compute_queue_.waitIdle()));
+    checked_try(vk::to_result(compute_queue_.submit(si)));
+    checked_try(vk::to_result(compute_queue_.waitIdle()));
 
-    try_(postprocess_outputs());
+    checked_try(postprocess_outputs());
     return ok();
 }
 
 result<void> vulkan_runtime_module::preprocess_inputs() noexcept
 {
-    try_var(dest, vk::to_result(device_.mapMemory(input_mem_, 0, VK_WHOLE_SIZE, {})));
+    checked_try_var(dest, vk::to_result(device_.mapMemory(input_mem_, 0, VK_WHOLE_SIZE, {})));
 
     for (size_t i = 0; i < inputs_size(); i++)
     {
-        try_var(src_tensor, device_input_tensor(i));
-        try_var(src_map, hrt::map(src_tensor, hrt::map_read));
+        checked_try_var(src_tensor, device_input_tensor(i));
+        checked_try_var(src_map, hrt::map(src_tensor, hrt::map_read));
         auto &desc = input_desc(i);
         memcpy((uint8_t *)dest + desc.start, src_map.buffer().data(), desc.size);
     }
 
     vk::MappedMemoryRange range(input_mem_, 0, VK_WHOLE_SIZE);
-    try_(vk::to_result(device_.flushMappedMemoryRanges(range)));
+    checked_try(vk::to_result(device_.flushMappedMemoryRanges(range)));
     device_.unmapMemory(input_mem_);
     return ok();
 }
 
 result<void> vulkan_runtime_module::postprocess_outputs() noexcept
 {
-    try_var(src, vk::to_result(device_.mapMemory(output_mem_, 0, VK_WHOLE_SIZE, {})));
+    checked_try_var(src, vk::to_result(device_.mapMemory(output_mem_, 0, VK_WHOLE_SIZE, {})));
     vk::MappedMemoryRange range(output_mem_, 0, VK_WHOLE_SIZE);
-    try_(vk::to_result(device_.invalidateMappedMemoryRanges(range)));
+    checked_try(vk::to_result(device_.invalidateMappedMemoryRanges(range)));
 
     for (size_t i = 0; i < outputs_size(); i++)
     {
-        try_var(dest_tensor, device_output_tensor(i));
-        try_var(dest_map, hrt::map(dest_tensor, hrt::map_write));
+        checked_try_var(dest_tensor, device_output_tensor(i));
+        checked_try_var(dest_map, hrt::map(dest_tensor, hrt::map_write));
         auto &desc = output_desc(i);
         memcpy(dest_map.buffer().data(), (const uint8_t *)src + desc.start, desc.size);
     }
@@ -320,17 +320,22 @@ result<vulkan_runtime_module::buffer_ref> vulkan_runtime_module::pop_buffer_ref(
 
 void vulkan_runtime_module::free_vulkan_resources() noexcept
 {
-    device_.freeCommandBuffers(cmd_pool_, cmd_buffer_);
-    device_.destroyCommandPool(cmd_pool_);
-    device_.destroyDescriptorPool(buffer_desc_pool_);
-    for (auto p : pipelines_owner_)
-        device_.destroyPipeline(p);
-    device_.destroyBuffer(input_buffer_);
-    device_.destroyBuffer(output_buffer_);
-    device_.destroyBuffer(data_buffer_);
-    device_.freeMemory(input_mem_);
-    device_.freeMemory(output_mem_);
-    device_.freeMemory(data_mem_);
+    if (device_)
+    {
+        if (cmd_pool_)
+            device_.freeCommandBuffers(cmd_pool_, cmd_buffer_);
+        device_.destroyCommandPool(cmd_pool_);
+        device_.destroyDescriptorPool(buffer_desc_pool_);
+        for (auto p : pipelines_owner_)
+            device_.destroyPipeline(p);
+        device_.destroyBuffer(input_buffer_);
+        device_.destroyBuffer(output_buffer_);
+        device_.destroyBuffer(data_buffer_);
+        device_.freeMemory(input_mem_);
+        device_.freeMemory(output_mem_);
+        device_.freeMemory(data_mem_);
+    }
+
     device_.destroy({});
     instance_.destroy({});
 }
